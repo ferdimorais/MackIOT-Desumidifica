@@ -1,0 +1,116 @@
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+
+
+// Definindo os pinos
+int PinoAnalogico = A0; // Define o pino A0 como Pino Analógico do sensor
+int PinoDigital = D2;   // Define pino D2 como Pino Digital do Sensor
+int Rele = D1;          // Pino Digital D1 como Relé
+
+int EstadoSensor = 0;
+int UltimoEstSensor = 0;
+int ValAnalogIn; // Introduz o valor analógico ao código
+
+// Configurações da rede WiFi
+const char* ssid = "XXXXXX"; // Substitua pelo nome da sua rede WiFi
+const char* password = "XXXXX"; // Substitua pela senha da sua rede WiFi
+
+// Configurações do MQTT
+const char* mqtt_server = "test.mosquitto.org";
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+void setup_wifi() {
+  delay(10);
+  Serial.println();
+  Serial.print("Conectando-se a ");
+  Serial.println(ssid);
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.println("WiFi conectado");
+  Serial.println("Endereço IP: ");
+  Serial.println(WiFi.localIP());
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Tentando conexão MQTT...");
+    if (client.connect("test.mosquitto.org")) {
+      Serial.println("conectado");
+      // Não precisamos subscrever a nenhum tópico neste caso
+    } else {
+      Serial.print("falhou, rc=");
+      Serial.print(client.state());
+      Serial.println(" tentando novamente em 5 segundos");
+      delay(5000);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(Rele, OUTPUT);     // Declara o Rele como Saída Digital
+  pinMode(PinoDigital, INPUT); // Declara o pino do sensor como Entrada Digital
+
+  setup_wifi();
+  client.setServer(mqtt_server, 1883);
+}
+
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+
+  // Lê o estado do sensor digital
+  EstadoSensor = digitalRead(PinoDigital);
+
+  if (EstadoSensor == 1 && UltimoEstSensor == 0) {
+    Serial.println("Umidade Alta: Drenar Reservatório");
+    client.publish("estado_umidade", " Umidade Alta: Drenar Reservatório");
+    UltimoEstSensor = 1;
+    delay(1000);
+  } 
+  else if (EstadoSensor == 1 && UltimoEstSensor == 1) {
+    delay(1000);
+  } 
+  else {
+    UltimoEstSensor = 0;
+    delay(1000);
+  }
+
+  // Lê o valor do sensor analógico
+  ValAnalogIn = analogRead(PinoAnalogico);
+  int Porcento = map(ValAnalogIn, 1023, 0, 0, 100); // Transforma o valor analógico em porcentagem
+
+  // Exibe os valores no monitor serial
+  Serial.print("Umidade: ");
+  Serial.print(Porcento);
+  Serial.println("%");
+
+  // Publica o valor da umidade no tópico MQTT
+  String payload = String(Porcento);
+  client.publish("umidade", payload.c_str());
+
+  // Verifica o nível de umidade e aciona o relé se necessário
+  if (Porcento >= 25) { // Se a porcentagem for maior ou igual a 25%
+    Serial.println("Drenando Reservatório");
+    client.publish("estado_umidade", "Drenando Reservatório");
+    digitalWrite(Rele, HIGH); // Aciona Relé (liga a bomba)
+  } 
+  else {
+    Serial.println("Reservatório Drenado");
+    client.publish("estado_ umidade ", " Reservatório Drenado ");
+    digitalWrite(Rele, LOW); // Desliga Relé (desliga a bomba)
+  }
+
+  delay(5000); // Adiciona um atraso de 5 segundos antes de ler os valores novamente
+}
