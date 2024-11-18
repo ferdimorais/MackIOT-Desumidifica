@@ -15,6 +15,9 @@ Utilizando um sensor de umidade de reservatório  de líquidos, serão monitorad
 * Ferramenta Conexão: MQTT Box 
 * Broker Público: test.mosquitto.org
 
+## LINK - YOUTUBE
+Fernando Tolentino Honório Morais
+
 ## AUTOR
 Fernando Tolentino Honório Morais
 
